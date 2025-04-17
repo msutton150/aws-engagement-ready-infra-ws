@@ -3,39 +3,47 @@ resource "random_string" "random" {
   special = false
   upper = false
 }
-
 resource "aws_s3_bucket" "s3_bucket" {
   bucket = "${var.bucket_name}-${random_string.random.result}"
-
   force_destroy = true
-  policy = <<EOF
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "PublicReadGetObject",
-            "Effect": "Allow",
-            "Principal": "*",
-            "Action": [
-                "s3:GetObject"
-            ],
-            "Resource": [
-                "arn:aws:s3:::${var.bucket_name}-${random_string.random.result}/*"
-            ]
-        }
-    ]
 }
-EOF
-
-  website {
-    index_document = var.home_page
-    error_document = var.error_page
-  }
-
-  tags = var.tags
-}
-
-resource "aws_s3_bucket_acl" "bucket_acl" {
+resource "aws_s3_bucket_policy" "s3_bucket_policy" {
   bucket = aws_s3_bucket.s3_bucket.id
-  acl    = "public-read"
-}
+  policy = data.aws_iam_policy_document.allow_public_access.json
+  depends_on = [aws_s3_bucket_public_access_block.s3_allow_access] 
+} 
+ 
+data "aws_iam_policy_document" "allow_public_access" { 
+ statement {  
+   principals { 
+        type = "AWS" 
+        identifiers = ["*"] 
+ } 
+ 
+ actions = [ "s3:GetObject" ] 
+ 
+ resources = [ aws_s3_bucket.s3_bucket.arn, "${aws_s3_bucket.s3_bucket.arn}/*" ] 
+} 
+} 
+ 
+resource "aws_s3_bucket_website_configuration" "s3_bucket_config" { 
+ bucket = aws_s3_bucket.s3_bucket.id 
+  
+ index_document { 
+    suffix = var.home_page  
+ } 
+ 
+ error_document {  
+    key = var.error_page 
+ } 
+} 
+ 
+ 
+resource "aws_s3_bucket_public_access_block" "s3_allow_access" { 
+ bucket = aws_s3_bucket.s3_bucket.id 
+  
+ block_public_acls = false 
+ block_public_policy = false 
+ ignore_public_acls = false 
+ restrict_public_buckets = false  
+} 
